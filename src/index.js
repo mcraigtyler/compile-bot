@@ -20,6 +20,7 @@ client.on('messageCreate', (message) => {
 
     const matches = message.content.matchAll(/\{\{(?<protocol>apathy|darkness|death|fire|gravity|hate|life|light|love|metal|plague|psychic|speed|spirit|water)\}\{(?<value>[0-6])\}\}/g);
     if(!matches) return;
+    const embeds = [];
     for (const match of matches) {
         if (match) {
             const protocol = match.groups.protocol;
@@ -37,26 +38,30 @@ client.on('messageCreate', (message) => {
                         .setTitle(`${card.protocol} ${card.value}`)
                         .addFields([
                             {
-                                name: 'Top',
-                                value: (card.top && card.top.length > 0) ? card.top : ' '
+                                name: '\u200b',
+                                value: (card.top && card.top.length > 0) ? "```"+card.top+"```" : "```          ```"
                             },
                             {
-                                name: 'Middle',
-                                value: (card.middle && card.middle.length > 0) ? card.middle : ' '
+                                name: '\u200b',
+                                value: (card.middle && card.middle.length > 0) ? "```"+card.middle+"```" : "```          ```"
                             },
                             {
-                                name: 'Bottom',
-                                value: (card.bottom && card.bottom.length > 0) ? card.bottom : ' '
+                                name: '\u200b',
+                                value: (card.bottom && card.bottom.length > 0) ? "```"+card.bottom+"```" : "```          ```"
                             }
                         ])
                     
-                    message.reply({ embeds: [embed] });
+                    embeds.push(embed);
                 } catch (error) {
                     console.error(`Error finding card: ${JSON.stringify(error)}`);
                     return;
                 }
             }
         }
+    }
+
+    if (embeds.length > 0) {
+        message.reply({embeds});
     }
 })
 
