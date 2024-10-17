@@ -823,7 +823,7 @@
         "value": 1,
         "top": "You can play cards in any line.",
         "middle": "Draw 2 cards.",
-        "bottom": "<div><span class='emphasis'>Start:</span> Either discard 1 card or flip this card.</div>",
+        "bottom": "Start: Either discard 1 card or flip this card.</div>",
         "keywords": {
             "discard": true,
             "draw": true,

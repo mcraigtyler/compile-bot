@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import {Client, IntentsBitField, EmbedBuilder} from 'discord.js';
 import cards from './cards.json' with { type: 'json' };
+import {stripHtml } from 'string-strip-html';
 
 const client = new Client({
     intents: [
@@ -22,7 +23,7 @@ client.on('messageCreate', (message) => {
     if(!matches) return;
     const embeds = [];
     for (const match of matches) {
-        if (match) {
+        if (match && embeds.length <= 8) {
             const protocol = match.groups.protocol;
             const value = parseInt(match.groups.value);
             if (value >= 0 && value <= 6) {
@@ -33,23 +34,29 @@ client.on('messageCreate', (message) => {
                         return;
                     }
 
+                    let description = '';
+                    description += (card.top && card.top.length > 0) ? "```"+stripHtml(card.top).result+"```" : "```          ```";
+                    description += (card.middle && card.middle.length > 0) ? "```"+stripHtml(card.middle).result+"```" : "```          ```";
+                    description += (card.bottom && card.bottom.length > 0) ? "```"+stripHtml(card.bottom).result+"```" : "```          ```";
+
                     const embed = new EmbedBuilder()
                         .setColor('Red')
                         .setTitle(`${card.protocol} ${card.value}`)
-                        .addFields([
-                            {
-                                name: '\u200b',
-                                value: (card.top && card.top.length > 0) ? "```"+card.top+"```" : "```          ```"
-                            },
-                            {
-                                name: '\u200b',
-                                value: (card.middle && card.middle.length > 0) ? "```"+card.middle+"```" : "```          ```"
-                            },
-                            {
-                                name: '\u200b',
-                                value: (card.bottom && card.bottom.length > 0) ? "```"+card.bottom+"```" : "```          ```"
-                            }
-                        ])
+                        .setDescription(description);
+                        // .addFields([
+                        //     {
+                        //         name: '\u200b',
+                        //         value: (card.top && card.top.length > 0) ? "```"+card.top+"```" : "```          ```"
+                        //     },
+                        //     {
+                        //         name: '\u200b',
+                        //         value: (card.middle && card.middle.length > 0) ? "```"+card.middle+"```" : "```          ```"
+                        //     },
+                        //     {
+                        //         name: '\u200b',
+                        //         value: (card.bottom && card.bottom.length > 0) ? "```"+card.bottom+"```" : "```          ```"
+                        //     }
+                        // ])
                     
                     embeds.push(embed);
                 } catch (error) {
