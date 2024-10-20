@@ -1,11 +1,9 @@
 import 'dotenv/config';
 import packageInfo from '../package.json' with {type: 'json'};
 import fetch from 'node-fetch';
-import {stripHtml} from 'string-strip-html';
 import {Client, IntentsBitField, EmbedBuilder} from 'discord.js';
 
 //const blankField = '\u200b';
-const emtptyFieldValue = "``` ```";
 const fieldPrefix = "```";
 const fieldSuffix = "```";
 
@@ -24,9 +22,9 @@ async function getCards() {
     }
 
     protocols = Array.from(new Set(cards.map(card => card.protocol.toLowerCase())));
-    protocolsRegex = protocols.join("|");
+    protocolsRegex = protocols.map(protocol => `[${protocol.charAt(0).toUpperCase()}|${protocol.charAt(0).toLowerCase()}]${protocol.slice(1)}`).join("|");
 
-    console.log(`Fetched ${cards.length} cards.`);
+    console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
 }
 
 function checkEnvVars() {
@@ -38,6 +36,23 @@ function checkEnvVars() {
         console.error("Missing environment variable: CARDS_JSON_URL");
         process.exit(1);
     }    
+}
+
+function buildFieldText(emphasis, text) {
+    let returnText = fieldPrefix;
+    if (emphasis && emphasis.length > 0) {
+        returnText += `${emphasis} `;
+    }
+
+    if(text && text.length > 0) {
+        returnText += text;
+    }else {
+        returnText += ' ';
+    }
+
+    returnText += fieldSuffix;
+
+    return returnText;
 }
 
 const client = new Client({
@@ -57,6 +72,16 @@ client.on('messageCreate', (message) => {
     // Ignore messages from the bot
     if(message.author.bot) return;
 
+    if(message.content === '{{!refresh}}') {
+        getCards().then(() => {
+            message.reply(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
+        })
+        .catch(error => {
+            message.reply(`Error refreshing cards: ${JSON.stringify(error)}`);
+        })
+        return;
+    }
+
     const matches = message.content.matchAll(new RegExp(`\\[(?<protocol>${protocolsRegex}) (?<value>[0-6])\\]`, 'g'));
     if(!matches) return;
 
@@ -68,21 +93,22 @@ client.on('messageCreate', (message) => {
 
             if (value >= 0 && value <= 7) {
                 try {
-                    const card = cards.find(card => card.protocol.toLowerCase() === protocol && card.value === value);
+                    const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLocaleLowerCase() && card.value === value);
                     if(!card) {
                         console.log(`${message.createdTimestamp}:${message.author.username} - Card not found[${protocol} ${value}]`);
                         return;
                     }
 
                     let description = '';
-                    description += (card.top && card.top.length > 0) ? `${fieldPrefix}${stripHtml(card.top).result}${fieldSuffix}` : emtptyFieldValue;
-                    description += (card.middle && card.middle.length > 0) ? `${fieldPrefix}${stripHtml(card.middle).result}${fieldSuffix}` : emtptyFieldValue;
-                    description += (card.bottom && card.bottom.length > 0) ? `${fieldPrefix}${stripHtml(card.bottom).result}${fieldSuffix}` : emtptyFieldValue;
+                    description += buildFieldText(card.top.emphasis, card.top.text);
+                    description += buildFieldText(card.middle.emphasis, card.middle.text);
+                    description += buildFieldText(card.bottom.emphasis, card.bottom.text);
 
                     const embed = new EmbedBuilder()
                         .setColor('Red')
                         .setTitle(`${card.protocol} ${card.value}`)
-                        .setURL(`${process.env.CARDS_URL}?protocol=${card.protocol}&value=${card.value}`)
+                        //.setThumbnail(process.env.ICON_URL)
+                        .setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
                         .setDescription(description)
                         .setFooter({text: `CompileBot v${packageInfo.version}`, iconURL: `${process.env.ICON_URL}`});
                     embeds.push(embed);
