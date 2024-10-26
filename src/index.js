@@ -10,6 +10,8 @@ const fieldSuffix = "```";
 let cards;
 let protocols = [];
 let protocolsRegex = "";
+let imgRegex = undefined;
+let txtRegex = undefined;
 
 async function getCards() {
     console.log("Fetching cards...");
@@ -24,6 +26,9 @@ async function getCards() {
     protocols = Array.from(new Set(cards.map(card => card.protocol.toLowerCase())));
     protocolsRegex = protocols.map(protocol => `[${protocol.charAt(0).toUpperCase()}|${protocol.charAt(0).toLowerCase()}]${protocol.slice(1)}`).join("|");
 
+    imgRegex = new RegExp(`\\((?<protocol>${protocolsRegex}) (?<value>[0-6])\\)`, 'g');
+    txtRegex = new RegExp(`\\<(?<protocol>${protocolsRegex}) (?<value>[0-6])\\>`, 'g');
+
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
 }
 
@@ -32,10 +37,14 @@ function checkEnvVars() {
         console.error("Missing environment variable: DISCORD_TOKEN");
         process.exit(1);
     }
-        if(!process.env.CARDS_JSON_URL) {
+    if(!process.env.CARDS_JSON_URL) {
         console.error("Missing environment variable: CARDS_JSON_URL");
         process.exit(1);
-    }    
+    }
+    if(!process.env.CARDS_IMAGE_URL) {
+        console.error("Missing environment variable: CARDS_IMAGE_URL");
+        process.exit(1);
+    }
 }
 
 function buildFieldText(emphasis, text) {
@@ -53,6 +62,61 @@ function buildFieldText(emphasis, text) {
     returnText += fieldSuffix;
 
     return returnText;
+}
+
+function buildCardEmbed(message, matches, showImage) {
+    const embeds = [];
+    for (const match of matches) {
+        if (match && embeds.length <= 8) {
+            const protocol = match.groups.protocol;
+            const value = parseInt(match.groups.value);
+
+            if (value >= 0 && value <= 7) {
+                try {
+                    const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLocaleLowerCase() && card.value === value);
+                    if(!card) {
+                        console.log(`${message.createdTimestamp}:${message.author.username} - Card not found[${protocol} ${value}]`);
+                        return;
+                    }
+
+                    let description = '';
+                    description += buildFieldText(card.top.emphasis, card.top.text);
+                    description += buildFieldText(card.middle.emphasis, card.middle.text);
+                    description += buildFieldText(card.bottom.emphasis, card.bottom.text);
+
+                    const imgUrl = `${process.env.CARDS_IMAGE_URL}/${card.protocol}/${card.value}.jpg`;
+
+                    console.log(`imgUrl: ${imgUrl}`);
+
+                    const embed = new EmbedBuilder()
+                        .setColor(process.env.EMBED_COLOR || 'Blue')
+                        .setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
+                        .setFooter({text: `CompileBot v${packageInfo.version}`, iconURL: `${process.env.ICON_URL}`});
+
+                    if (showImage) {
+                        embed.setImage(imgUrl);
+                    } else {
+                        embed.setTitle(`${card.protocol} ${card.value}`)
+                        embed.setDescription(description);
+                    }
+                    embeds.push(embed);
+                } catch (error) {
+                    console.error(`Error creating Embed for card: ${JSON.stringify(error)}`);
+                    return;
+                }
+            }
+        }
+    }
+
+    if (embeds.length > 0) {
+        console.log(`${message.createdTimestamp}:${message.author.username} - Sending ${embeds.length} embeds`);
+        try {
+            message.reply({embeds});
+        } catch (error) {
+            console.error(`Error sending message: ${JSON.stringify(error)}`);
+            return;
+        }
+    }    
 }
 
 const client = new Client({
@@ -82,53 +146,13 @@ client.on('messageCreate', (message) => {
         return;
     }
 
-    const matches = message.content.matchAll(new RegExp(`\\[(?<protocol>${protocolsRegex}) (?<value>[0-6])\\]`, 'g'));
-    if(!matches) return;
+    //No good way to check to see if there are matches so just process each
+    const imgMatches = message.content.matchAll(imgRegex);
+    buildCardEmbed(message, imgMatches, true);
 
-    const embeds = [];
-    for (const match of matches) {
-        if (match && embeds.length <= 8) {
-            const protocol = match.groups.protocol;
-            const value = parseInt(match.groups.value);
+    const txtMatches = message.content.matchAll(txtRegex);
+    buildCardEmbed(message, txtMatches, false);
 
-            if (value >= 0 && value <= 7) {
-                try {
-                    const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLocaleLowerCase() && card.value === value);
-                    if(!card) {
-                        console.log(`${message.createdTimestamp}:${message.author.username} - Card not found[${protocol} ${value}]`);
-                        return;
-                    }
-
-                    let description = '';
-                    description += buildFieldText(card.top.emphasis, card.top.text);
-                    description += buildFieldText(card.middle.emphasis, card.middle.text);
-                    description += buildFieldText(card.bottom.emphasis, card.bottom.text);
-
-                    const embed = new EmbedBuilder()
-                        .setColor('Red')
-                        .setTitle(`${card.protocol} ${card.value}`)
-                        //.setThumbnail(process.env.ICON_URL)
-                        .setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
-                        .setDescription(description)
-                        .setFooter({text: `CompileBot v${packageInfo.version}`, iconURL: `${process.env.ICON_URL}`});
-                    embeds.push(embed);
-                } catch (error) {
-                    console.error(`Error creating Embed for card: ${JSON.stringify(error)}`);
-                    return;
-                }
-            }
-        }
-    }
-
-    if (embeds.length > 0) {
-        console.log(`${message.createdTimestamp}:${message.author.username} - Sending ${embeds.length} embeds`);
-        try {
-            message.reply({embeds});
-        } catch (error) {
-            console.error(`Error sending message: ${JSON.stringify(error)}`);
-            return;
-        }
-    }
 })
 
 checkEnvVars();
