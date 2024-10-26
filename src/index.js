@@ -26,8 +26,8 @@ async function getCards() {
     protocols = Array.from(new Set(cards.map(card => card.protocol.toLowerCase())));
     protocolsRegex = protocols.map(protocol => `[${protocol.charAt(0).toUpperCase()}|${protocol.charAt(0).toLowerCase()}]${protocol.slice(1)}`).join("|");
 
-    imgRegex = new RegExp(`\\((?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\)`, 'g');
-    txtRegex = new RegExp(`\\<(?<protocol>${protocolsRegex}) (?<value>[0-6])\\>`, 'g');
+    imgRegex = new RegExp(`\\${process.env.MSG_IMG_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\${process.env.MSG_IMG_SUFFIX}`, 'g');
+    txtRegex = new RegExp(`\\${process.env.MSG_TXT_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6])\\${process.env.MSG_TXT_SUFFIX}`, 'g');
 
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
 }
@@ -43,6 +43,22 @@ function checkEnvVars() {
     }
     if(!process.env.CARDS_IMAGE_URL) {
         console.error("Missing environment variable: CARDS_IMAGE_URL");
+        process.exit(1);
+    }
+    if(!process.env.MSG_IMG_PREFIX) {
+        console.error("Missing environment variable: MSG_IMG_PREFIX");
+        process.exit(1);
+    }
+    if(!process.env.MSG_IMG_SUFFIX) {
+        console.error("Missing environment variable: MSG_IMG_SUFFIX");
+        process.exit(1);
+    }
+    if(!process.env.MSG_TXT_PREFIX) {
+        console.error("Missing environment variable: MSG_TXT_PREFIX");
+        process.exit(1);
+    }
+    if(!process.env.MSG_TXT_SUFFIX) {
+        console.error("Missing environment variable: MSG_TXT_SUFFIX");
         process.exit(1);
     }
 }
@@ -129,7 +145,15 @@ const client = new Client({
 
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
-})
+    client.guilds.fetch().then((guilds) => {
+        console.log(`Guilds: `);
+        guilds.forEach(guild => {
+            console.log(`\t${guild.name}`);
+        });
+    }).finally(() => {
+        console.log(`Listening for messages...`);
+    });
+});
 
 client.on('messageCreate', (message) => {
     // Ignore messages from the bot
@@ -152,7 +176,18 @@ client.on('messageCreate', (message) => {
     const txtMatches = message.content.matchAll(txtRegex);
     buildCardEmbed(message, txtMatches, false);
 
+});
+
+//joined a server
+client.on("guildCreate", guild => {
+    console.log("Joined a new guild: " + guild.name);
 })
+
+//removed from a server
+client.on("guildDelete", guild => {
+    console.log("Left a guild: " + guild.name);
+
+});
 
 checkEnvVars();
 getCards().then(() => {
