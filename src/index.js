@@ -26,7 +26,7 @@ async function getCards() {
     protocols = Array.from(new Set(cards.map(card => card.protocol.toLowerCase())));
     protocolsRegex = protocols.map(protocol => `[${protocol.charAt(0).toUpperCase()}|${protocol.charAt(0).toLowerCase()}]${protocol.slice(1)}`).join("|");
 
-    imgRegex = new RegExp(`\\((?<protocol>${protocolsRegex}) (?<value>[0-6])\\)`, 'g');
+    imgRegex = new RegExp(`\\((?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\)`, 'g');
     txtRegex = new RegExp(`\\<(?<protocol>${protocolsRegex}) (?<value>[0-6])\\>`, 'g');
 
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
@@ -69,13 +69,24 @@ function buildCardEmbed(message, matches, showImage) {
     for (const match of matches) {
         if (match && embeds.length <= 8) {
             const protocol = match.groups.protocol;
-            const value = parseInt(match.groups.value);
 
-            if (value >= 0 && value <= 7) {
-                try {
-                    const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLocaleLowerCase() && card.value === value);
+            try {
+
+                const embed = new EmbedBuilder()
+                    .setColor(process.env.EMBED_COLOR || 'Blue')
+                    .setFooter({text: `CompileBot v${packageInfo.version}`, iconURL: `${process.env.ICON_URL}`});
+
+                if (showImage) {
+                    //If the value is a or b then uppercase it, otherwise it is a number so use it.
+                    const cardValue = isNaN(match.groups.value) ? match.groups.value.toUpperCase() : match.groups.value;
+                    const cardProtocol = protocol.charAt(0).toUpperCase() + protocol.slice(1);
+                    const imgUrl = `${process.env.CARDS_IMAGE_URL}/${cardProtocol}/${cardValue}.jpg`;
+                    embed.setImage(imgUrl);
+                } else {
+                    const value = parseInt(match.groups.value);
+                    const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLowerCase() && card.value === value);
                     if(!card) {
-                        console.log(`${message.createdTimestamp}:${message.author.username} - Card not found[${protocol} ${value}]`);
+                        console.log(`${message.createdTimestamp}:${message.author.username} - Card not found[${protocol} ${match.groups.value}]`);
                         return;
                     }
 
@@ -84,26 +95,14 @@ function buildCardEmbed(message, matches, showImage) {
                     description += buildFieldText(card.middle.emphasis, card.middle.text);
                     description += buildFieldText(card.bottom.emphasis, card.bottom.text);
 
-                    const imgUrl = `${process.env.CARDS_IMAGE_URL}/${card.protocol}/${card.value}.jpg`;
-
-                    console.log(`imgUrl: ${imgUrl}`);
-
-                    const embed = new EmbedBuilder()
-                        .setColor(process.env.EMBED_COLOR || 'Blue')
-                        .setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
-                        .setFooter({text: `CompileBot v${packageInfo.version}`, iconURL: `${process.env.ICON_URL}`});
-
-                    if (showImage) {
-                        embed.setImage(imgUrl);
-                    } else {
-                        embed.setTitle(`${card.protocol} ${card.value}`)
-                        embed.setDescription(description);
-                    }
-                    embeds.push(embed);
-                } catch (error) {
-                    console.error(`Error creating Embed for card: ${JSON.stringify(error)}`);
-                    return;
+                    embed.setTitle(`${card.protocol} ${card.value}`)
+                    embed.setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
+                    embed.setDescription(description);
                 }
+                embeds.push(embed);
+            } catch (error) {
+                console.error(`Error creating Embed for card: ${JSON.stringify(error)}`);
+                return;
             }
         }
     }
