@@ -12,29 +12,39 @@ let protocols = [];
 let protocolsRegex = "";
 let imgRegex = undefined;
 let txtRegex = undefined;
+let missingBSides = [];
 
 async function getCards() {
     console.log("Fetching cards...");
     try {
-        const response = await fetch(process.env.CARDS_JSON_URL);
-        cards = await response.json();
+        const protocolsJSON = await fetch(process.env.PROTOCOLS_JSON_URL);
+        protocols = await protocolsJSON.json();
+
+        const cardsJSON = await fetch(process.env.CARDS_JSON_URL);
+        cards = await cardsJSON.json();
     } catch (error) {
         console.error(`Error fetching cards: ${JSON.stringify(error)}`);
         return;
     }
 
-    protocols = Array.from(new Set(cards.map(card => card.protocol.toLowerCase())));
-    protocolsRegex = protocols.map(protocol => `[${protocol.charAt(0).toUpperCase()}|${protocol.charAt(0).toLowerCase()}]${protocol.slice(1)}`).join("|");
+    protocolsRegex = protocols.map(p => `[${p.protocol.charAt(0).toUpperCase()}|${p.protocol.charAt(0).toLowerCase()}]${p.protocol.slice(1)}`).join("|");
 
     imgRegex = new RegExp(`\\${process.env.MSG_IMG_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\${process.env.MSG_IMG_SUFFIX}`, 'g');
     txtRegex = new RegExp(`\\${process.env.MSG_TXT_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6])\\${process.env.MSG_TXT_SUFFIX}`, 'g');
 
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
+
+    missingBSides = process.env.NO_B_SIDES.split(',');
+    console.log(`Missing BSides: ${missingBSides}`);
 }
 
 function checkEnvVars() {
     if(!process.env.DISCORD_TOKEN) {
         console.error("Missing environment variable: DISCORD_TOKEN");
+        process.exit(1);
+    }
+    if(!process.env.PROTOCOLS_JSON_URL) {
+        console.error("Missing environment variable: PROTOCOLS_JSON_URL");
         process.exit(1);
     }
     if(!process.env.CARDS_JSON_URL) {
@@ -94,9 +104,26 @@ function buildCardEmbed(message, matches, showImage) {
 
                 if (showImage) {
                     //If the value is a or b then uppercase it, otherwise it is a number so use it.
-                    const cardValue = isNaN(match.groups.value) ? match.groups.value.toUpperCase() : match.groups.value;
-                    const cardProtocol = protocol.charAt(0).toUpperCase() + protocol.slice(1);
-                    const imgUrl = `${process.env.CARDS_IMAGE_URL}/${cardProtocol}/${cardValue}.jpg`;
+                    const isProtocol = isNaN(match.groups.value);
+                    let isFound = true;
+                    if(isProtocol) {
+                        //Check for missing B sides
+                        if(match.groups.value.toLowerCase() === 'b' && missingBSides.includes(protocol.toLowerCase())) {
+                            isFound = false;
+                        }
+                    } else {
+                        const value = parseInt(match.groups.value);
+                        const card = cards.find(card => card.protocol.toLowerCase() === protocol.toLowerCase() && card.value === value);
+                        if(!card) {
+                            isFound = false;
+                        }
+                    }
+
+                    const cardValue =  isProtocol ? match.groups.value.toUpperCase() : match.groups.value;
+                    const cp = protocols.find(p => p.protocol.toLowerCase() === protocol.toLowerCase());
+                    const imgUrl = (isFound) ? `${process.env.CARDS_IMAGE_URL}/${cp.protocol}/${cardValue}.jpg` : `${process.env.CARDS_IMAGE_URL}/404.jpg`;
+                    console.log(`${message.createdTimestamp}:${message.author.username} - Sending image: ${imgUrl}`);
+
                     embed.setImage(imgUrl);
                 } else {
                     const value = parseInt(match.groups.value);
@@ -136,6 +163,7 @@ function buildCardEmbed(message, matches, showImage) {
 
 const client = new Client({
     intents: [
+        IntentsBitField.Flags.DirectMessages,
         IntentsBitField.Flags.Guilds,
         IntentsBitField.Flags.GuildMembers,
         IntentsBitField.Flags.GuildMessages,
@@ -156,6 +184,8 @@ client.on('ready', () => {
 });
 
 client.on('messageCreate', (message) => {
+    console.log(`${message.createdTimestamp}:${message.author.username}`);
+
     // Ignore messages from the bot
     if(message.author.bot) return;
 
