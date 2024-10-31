@@ -34,8 +34,7 @@ async function getCards() {
 
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
 
-    missingBSides = process.env.NO_B_SIDES.split(',');
-    console.log(`Missing BSides: ${missingBSides}`);
+    missingBSides = (process.env.NO_B_SIDES) ? process.env.NO_B_SIDES.split(',') : [];
 }
 
 function checkEnvVars() {
@@ -92,8 +91,16 @@ function buildFieldText(emphasis, text) {
 
 function buildCardEmbed(message, matches, showImage) {
     const embeds = [];
+    const uniqueCards = new Set();
+    
     for (const match of matches) {
         if (match && embeds.length <= 8) {
+            const protocolValue = `${match.groups.protocol.toLowerCase()}-${match.groups.value.toLowerCase()}`;
+
+            if(uniqueCards.has(protocolValue)) {
+                continue;
+            }
+
             const protocol = match.groups.protocol;
 
             try {
@@ -124,6 +131,10 @@ function buildCardEmbed(message, matches, showImage) {
                     const imgUrl = (isFound) ? `${process.env.CARDS_IMAGE_URL}/${cp.protocol}/${cardValue}.jpg` : `${process.env.CARDS_IMAGE_URL}/404.jpg`;
                     console.log(`${message.createdTimestamp}:${message.author.username} - Sending image: ${imgUrl}`);
 
+                    if(!isFound) {
+                        embed.setTitle(`${protocol} ${cardValue}`)
+                    }
+
                     embed.setImage(imgUrl);
                 } else {
                     const value = parseInt(match.groups.value);
@@ -142,6 +153,8 @@ function buildCardEmbed(message, matches, showImage) {
                     embed.setURL(`${process.env.CARDS_URL}?protocol=${card.protocol.toLowerCase()}&value=${card.value}&groupByProtocol=false`)
                     embed.setDescription(description);
                 }
+
+                uniqueCards.add(protocolValue);
                 embeds.push(embed);
             } catch (error) {
                 console.error(`Error creating Embed for card: ${JSON.stringify(error)}`);
