@@ -28,15 +28,13 @@ async function getCards() {
         return;
     }
 
+    protocols.push({protocol: 'Control', top: "", bottom: "", set: "MN01"});
     protocolsRegex = protocols.map(p => `[${p.protocol.charAt(0).toUpperCase()}|${p.protocol.charAt(0).toLowerCase()}]${p.protocol.slice(1)}`).join("|");
 
     imgRegex = new RegExp(`\\${process.env.MSG_IMG_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\${process.env.MSG_IMG_SUFFIX}`, 'g');
     txtRegex = new RegExp(`\\${process.env.MSG_TXT_PREFIX}(?<protocol>${protocolsRegex}) (?<value>[0-6aAbB])\\${process.env.MSG_TXT_SUFFIX}`, 'g');
 
     console.log(`Fetched ${cards.length} cards with ${protocols.length} protocols`);
-
-    missingBSides = (process.env.NO_B_SIDES) ? process.env.NO_B_SIDES.split(',') : [];
-
 }
 
 function checkEnvVars() {
@@ -136,7 +134,7 @@ function buildCardEmbed(message, matches, showImage) {
                         embed.setTitle(`${properCase(protocol)} ${cardValue}`)
                     }
     
-                    const imgUrl = (card) ? `${process.env.CARDS_IMAGE_URL}/${card.protocol}/${cardValue}.jpg` : `${process.env.CARDS_IMAGE_URL}/404.jpg`;
+                    const imgUrl = (card) ? `${process.env.CARDS_IMAGE_URL}/${card.protocol}/${cardValue}.${process.env.IMG_EXT}` : `${process.env.CARDS_IMAGE_URL}/404.jpg`;
                     console.log(`${message.createdTimestamp}:${message.author.username} - Sending image: ${imgUrl}`);
 
                     embed.setImage(imgUrl);
@@ -144,7 +142,7 @@ function buildCardEmbed(message, matches, showImage) {
                     embed.setTitle(`${properCase(protocol)} ${cardValue}`);
 
                     let description = '';
-                    if(cardValue.toLowerCase() === 'b') {
+                    if(protocol.toLowerCase() === 'control') {
                         const aypwip = responeses[Math.floor(Math.random() * responeses.length)];
                         description += buildFieldText(`Are you pondering what I'm pondering?`, '');
                         description += buildFieldText('', aypwip);
